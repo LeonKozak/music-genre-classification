@@ -3,7 +3,7 @@ import os
 import math
 import librosa
 import numpy as np
-
+from pathlib import Path
 
 def add_white_noise(signal, noise_factor=0.005):
     noise = np.random.randn(len(signal))
@@ -14,9 +14,12 @@ def pitch_shift(signal, sr, n_steps=2):
     return librosa.effects.pitch_shift(signal, sr=sr, n_steps=n_steps)
 
 
-DATASET_PATH = "Data/genres_original"
-print("Dataset exists:", os.path.exists(DATASET_PATH))
-JSON_PATH = "data_10.json"
+# Project paths
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATASET_PATH = PROJECT_ROOT / "Data" / "genres_original"
+JSON_PATH = PROJECT_ROOT / "data_10.json"
+
+print("Dataset exists:", DATASET_PATH.exists())
 
 SAMPLE_RATE = 22050
 TRACK_DURATION = 30  # seconds
@@ -32,6 +35,9 @@ def save_mfcc(
     num_segments=5
 ):
     """Extract MFCCs from dataset and save to JSON"""
+    
+    dataset_path = Path(dataset_path)
+    json_path = Path(json_path)
 
     data = {
         "mapping": [],
@@ -45,7 +51,7 @@ def save_mfcc(
     for i, (dirpath, dirnames, filenames) in enumerate(os.walk(dataset_path)):
 
         # skip root folder
-        if dirpath == dataset_path:
+        if path(dirpath) == dataset_path:
             continue
 
         semantic_label = os.path.basename(dirpath)
