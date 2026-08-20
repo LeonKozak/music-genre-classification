@@ -4,10 +4,11 @@ from sklearn.model_selection import train_test_split
 import tensorflow.keras as keras
 import matplotlib.pyplot as plt
 from tensorflow.keras.callbacks import EarlyStopping
-
+from pathlib import Path
 
 # path to json file that stores MFCCs and genre labels
-DATA_PATH = "data_10.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_PATH = PROJECT_ROOT / "data_10.json"
 
 
 def load_data(data_path):
@@ -46,8 +47,8 @@ def plot_history(history):
     fig, axs = plt.subplots(2)
 
     # Accuracy plot
-    axs[0].plot(history.history["accuracy"], label="train accuracy")
-    axs[0].plot(history.history["val_accuracy"], label="test accuracy")
+    axs[0].plot(history.history["accuracy"], label="validation accuracy")
+    axs[0].plot(history.history["val_accuracy"], label="validation loss")
     axs[0].set_ylabel("Accuracy")
     axs[0].legend(loc="lower right")
     axs[0].set_title("Accuracy eval")
@@ -69,9 +70,22 @@ if __name__ == "__main__":
     X, y = load_data(DATA_PATH)
 
     # train/test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3
-    )
+# Split data into training (70%), validation (15%) and test (15%)
+X_train, X_temp, y_train, y_temp = train_test_split(
+    X,
+    y,
+    test_size=0.30,
+    random_state=42,
+    stratify=y
+)
+
+X_val, X_test, y_val, y_test = train_test_split(
+    X_temp,
+    y_temp,
+    test_size=0.50,
+    random_state=42,
+    stratify=y_temp
+)
 
     # Run 3 Model (BEST PERFORMING)
     model = keras.Sequential([
@@ -107,11 +121,20 @@ if __name__ == "__main__":
     history = model.fit(
         X_train,
         y_train,
-        validation_data=(X_test, y_test),
+        validation_data=(X_val, y_val),
         epochs=150,
         batch_size=32,
         callbacks=[early_stopping]
     )
+# Evaluate on the unseen test set
+test_loss, test_accuracy = model.evaluate(
+    X_test,
+    y_test,
+    verbose=0
+)
+
+print(f"\nTest accuracy: {test_accuracy:.4f}")
+print(f"Test loss: {test_loss:.4f}")
 
     # plot results
     plot_history(history)
