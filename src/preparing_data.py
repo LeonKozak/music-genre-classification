@@ -51,7 +51,7 @@ def save_mfcc(
     for i, (dirpath, dirnames, filenames) in enumerate(os.walk(dataset_path)):
 
         # skip root folder
-        if path(dirpath) == dataset_path:
+        if Path(dirpath) == dataset_path:
             continue
 
         semantic_label = os.path.basename(dirpath)
