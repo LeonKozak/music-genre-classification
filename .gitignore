@@ -231,7 +231,6 @@ data/
 
 # Generated feature files
 *.json
-*.npz
 
 # Model files
 *.h5

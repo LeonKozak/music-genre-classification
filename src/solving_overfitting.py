@@ -1,132 +1,287 @@
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.model_selection import train_test_split
-import tensorflow.keras as keras
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow import keras
 
 
-# Path to JSON file containing MFCCs and genre labels
+# -------------------------------------------------------
+# Project settings
+# -------------------------------------------------------
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_PATH = PROJECT_ROOT / "data_10.json"
 
+DATA_PATH = PROJECT_ROOT / "data_10.npz"
+
+RESULTS_DIR = PROJECT_ROOT / "results"
+RESULTS_DIR.mkdir(exist_ok=True)
+
+GRAPH_PATH = RESULTS_DIR / "improved_training_history.png"
+METRICS_PATH = RESULTS_DIR / "improved_metrics.txt"
+
+RANDOM_SEED = 42
+
+
+# -------------------------------------------------------
+# Load data
+# -------------------------------------------------------
 
 def load_data(data_path):
-    """Load MFCC features and labels from JSON."""
+    """Load MFCC features, labels and dataset splits."""
 
-    with open(data_path, "r") as fp:
-        data = json.load(fp)
+    data = np.load(data_path)
 
-    mfccs = data["mfcc"]
-    labels = data["labels"]
+    X = data["mfcc"]
+    y = data["labels"]
+    splits = data["splits"]
+    genres = data["mapping"]
 
-    # Find the longest MFCC sequence
-    max_len = max(len(mfcc) for mfcc in mfccs)
-
-    padded_mfccs = []
-
-    for mfcc in mfccs:
-        mfcc = np.array(mfcc)
-
-        # Pad or trim MFCC sequences to the same length
-        if mfcc.shape[0] < max_len:
-            pad_width = max_len - mfcc.shape[0]
-            mfcc = np.pad(
-                mfcc,
-                ((0, pad_width), (0, 0)),
-                mode="constant"
-            )
-        else:
-            mfcc = mfcc[:max_len, :]
-
-        padded_mfccs.append(mfcc)
-
-    X = np.array(padded_mfccs)
-    y = np.array(labels)
-
-    return X, y
+    return X, y, splits, genres
 
 
-def plot_history(history):
-    """Plot training and validation accuracy/loss."""
+# -------------------------------------------------------
+# Normalisation
+# -------------------------------------------------------
 
-    fig, axs = plt.subplots(2)
+def normalise_data(X_train, X_val, X_test):
+    """
+    Normalise MFCC values using statistics calculated
+    only from the training set.
+    """
+
+    mean = np.mean(
+        X_train,
+        axis=(0, 1),
+        keepdims=True
+    )
+
+    std = np.std(
+        X_train,
+        axis=(0, 1),
+        keepdims=True
+    )
+
+    # Prevent division by zero
+    std = np.where(std == 0, 1, std)
+
+    X_train = (X_train - mean) / std
+    X_val = (X_val - mean) / std
+    X_test = (X_test - mean) / std
+
+    return X_train, X_val, X_test
+
+
+# -------------------------------------------------------
+# Model
+# -------------------------------------------------------
+
+def build_model(input_shape, number_of_genres):
+    """Build a 1D CNN for music genre classification."""
+
+    model = keras.Sequential([
+
+        keras.layers.Input(
+            shape=input_shape
+        ),
+
+        keras.layers.Conv1D(
+            filters=64,
+            kernel_size=3,
+            activation="relu",
+            padding="same"
+        ),
+
+        keras.layers.BatchNormalization(),
+
+        keras.layers.MaxPooling1D(
+            pool_size=2
+        ),
+
+        keras.layers.Conv1D(
+            filters=128,
+            kernel_size=3,
+            activation="relu",
+            padding="same"
+        ),
+
+        keras.layers.BatchNormalization(),
+
+        keras.layers.MaxPooling1D(
+            pool_size=2
+        ),
+
+        keras.layers.Conv1D(
+            filters=256,
+            kernel_size=3,
+            activation="relu",
+            padding="same"
+        ),
+
+        keras.layers.BatchNormalization(),
+
+        keras.layers.GlobalAveragePooling1D(),
+
+        keras.layers.Dropout(0.4),
+
+        keras.layers.Dense(
+            128,
+            activation="relu"
+        ),
+
+        keras.layers.Dropout(0.3),
+
+        keras.layers.Dense(
+            number_of_genres,
+            activation="softmax"
+        )
+    ])
+
+    return model
+
+
+# -------------------------------------------------------
+# Plot results
+# -------------------------------------------------------
+
+def plot_history(history, output_path):
+    """Save and display training/validation graphs."""
+
+    fig, axs = plt.subplots(
+        2,
+        figsize=(10, 8)
+    )
 
     # Accuracy
     axs[0].plot(
         history.history["accuracy"],
         label="training accuracy"
     )
+
     axs[0].plot(
         history.history["val_accuracy"],
         label="validation accuracy"
     )
+
     axs[0].set_ylabel("Accuracy")
-    axs[0].legend(loc="lower right")
-    axs[0].set_title("Accuracy")
+
+    axs[0].set_title(
+        "Training and Validation Accuracy"
+    )
+
+    axs[0].legend(
+        loc="lower right"
+    )
 
     # Loss
     axs[1].plot(
         history.history["loss"],
         label="training loss"
     )
+
     axs[1].plot(
         history.history["val_loss"],
         label="validation loss"
     )
+
     axs[1].set_ylabel("Loss")
     axs[1].set_xlabel("Epoch")
-    axs[1].legend(loc="upper right")
-    axs[1].set_title("Loss")
+
+    axs[1].set_title(
+        "Training and Validation Loss"
+    )
+
+    axs[1].legend(
+        loc="upper right"
+    )
 
     plt.tight_layout()
+
+    plt.savefig(
+        output_path,
+        dpi=160,
+        bbox_inches="tight"
+    )
+
+    print(
+        f"Training graph saved to: {output_path}"
+    )
+
     plt.show()
 
 
+# -------------------------------------------------------
+# Main
+# -------------------------------------------------------
+
 if __name__ == "__main__":
 
-    # Load MFCC data
-    X, y = load_data(DATA_PATH)
+    # Reproducibility
+    np.random.seed(RANDOM_SEED)
+    keras.utils.set_random_seed(RANDOM_SEED)
 
-    # Split into training (70%), validation (15%) and test (15%)
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        X,
-        y,
-        test_size=0.30,
-        random_state=42,
-        stratify=y
+    print("Loading MFCC data...")
+
+    X, y, splits, genres = load_data(
+        DATA_PATH
     )
 
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp,
-        y_temp,
-        test_size=0.50,
-        random_state=42,
-        stratify=y_temp
+    # ---------------------------------------------------
+    # Use the track-level split created during preprocessing
+    # ---------------------------------------------------
+
+    train_mask = splits == "train"
+    validation_mask = splits == "validation"
+    test_mask = splits == "test"
+
+    X_train = X[train_mask]
+    y_train = y[train_mask]
+
+    X_val = X[validation_mask]
+    y_val = y[validation_mask]
+
+    X_test = X[test_mask]
+    y_test = y[test_mask]
+
+    print(f"Genres: {genres.tolist()}")
+
+    print(
+        f"\nTraining samples:   {len(X_train)}"
     )
 
-    print(f"Training samples:   {len(X_train)}")
-    print(f"Validation samples: {len(X_val)}")
-    print(f"Test samples:       {len(X_test)}")
+    print(
+        f"Validation samples: {len(X_val)}"
+    )
 
-    # Best-performing coursework model
-    model = keras.Sequential([
-        keras.layers.Flatten(
-            input_shape=(X_train.shape[1], X_train.shape[2])
+    print(
+        f"Test samples:       {len(X_test)}"
+    )
+
+    # ---------------------------------------------------
+    # Normalise MFCC values
+    # ---------------------------------------------------
+
+    print("\nNormalising MFCC features...")
+
+    X_train, X_val, X_test = normalise_data(
+        X_train,
+        X_val,
+        X_test
+    )
+
+    # ---------------------------------------------------
+    # Build model
+    # ---------------------------------------------------
+
+    model = build_model(
+        input_shape=(
+            X_train.shape[1],
+            X_train.shape[2]
         ),
+        number_of_genres=len(genres)
+    )
 
-        keras.layers.Dense(512, activation="relu"),
-        keras.layers.Dense(256, activation="relu"),
-        keras.layers.Dense(128, activation="relu"),
-
-        keras.layers.Dense(10, activation="softmax")
-    ])
-
-    # Compile model
     optimiser = keras.optimizers.Adam(
-        learning_rate=0.0001
+        learning_rate=0.001
     )
 
     model.compile(
@@ -137,32 +292,121 @@ if __name__ == "__main__":
 
     model.summary()
 
-    # Stop training when validation loss stops improving
-    early_stopping = EarlyStopping(
+    # ---------------------------------------------------
+    # Training controls
+    # ---------------------------------------------------
+
+    early_stopping = keras.callbacks.EarlyStopping(
         monitor="val_loss",
-        patience=10,
+        patience=12,
         restore_best_weights=True
     )
 
-    # Train model
+    reduce_learning_rate = keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss",
+        factor=0.5,
+        patience=5,
+        min_lr=0.00001
+    )
+
+    # ---------------------------------------------------
+    # Train
+    # ---------------------------------------------------
+
     history = model.fit(
         X_train,
         y_train,
-        validation_data=(X_val, y_val),
-        epochs=150,
+        validation_data=(
+            X_val,
+            y_val
+        ),
+        epochs=100,
         batch_size=32,
-        callbacks=[early_stopping]
+        callbacks=[
+            early_stopping,
+            reduce_learning_rate
+        ]
     )
 
-    # Final evaluation using previously unseen test data
+    # ---------------------------------------------------
+    # Final evaluation
+    # ---------------------------------------------------
+
     test_loss, test_accuracy = model.evaluate(
         X_test,
         y_test,
         verbose=0
     )
 
-    print(f"\nTest accuracy: {test_accuracy:.4f}")
-    print(f"Test loss: {test_loss:.4f}")
+    epochs_completed = len(
+        history.history["loss"]
+    )
 
-    # Plot training results
-    plot_history(history)
+    print("\nFinal Test Results")
+    print("------------------")
+
+    print(
+        f"Test accuracy: {test_accuracy:.4f}"
+    )
+
+    print(
+        f"Test loss:     {test_loss:.4f}"
+    )
+
+    print(
+        f"Epochs completed: {epochs_completed}"
+    )
+
+    # ---------------------------------------------------
+    # Save metrics
+    # ---------------------------------------------------
+
+    with open(
+        METRICS_PATH,
+        "w"
+    ) as file:
+
+        file.write(
+            "Improved Music Genre Classification Model\n"
+        )
+
+        file.write(
+            "==========================================\n\n"
+        )
+
+        file.write(
+            f"Test accuracy: {test_accuracy:.4f}\n"
+        )
+
+        file.write(
+            f"Test loss: {test_loss:.4f}\n"
+        )
+
+        file.write(
+            f"Epochs completed: {epochs_completed}\n"
+        )
+
+        file.write(
+            f"Training samples: {len(X_train)}\n"
+        )
+
+        file.write(
+            f"Validation samples: {len(X_val)}\n"
+        )
+
+        file.write(
+            f"Test samples: {len(X_test)}\n"
+        )
+
+    print(
+        f"Metrics saved to: {METRICS_PATH}"
+    )
+
+    # ---------------------------------------------------
+    # Save and display graph
+    # ---------------------------------------------------
+
+    plot_history(
+        history,
+        GRAPH_PATH
+    )

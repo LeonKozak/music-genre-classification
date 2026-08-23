@@ -1,0 +1,9 @@
+Music Genre Classification Results
+=================================
+
+Test accuracy: 0.4467
+Test loss: 2.8475
+Epochs completed: 14
+Training samples: 20970
+Validation samples: 1500
+Test samples: 1500
