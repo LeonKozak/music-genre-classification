@@ -149,6 +149,7 @@ The training script evaluates the model against the unseen test set and saves th
 
 ## Background
 
-This project originated from university coursework in Music Programming and was later reworked as a portfolio project.
+This project originated from university coursework in Music Programming.
 
+The coursework focused on audio preprocessing, MFCC feature extraction, data augmentation, neural network architecture and techniques for reducing overfitting.
 The portfolio version includes improvements to dataset splitting, data augmentation, feature storage, model architecture, reproducibility and evaluation methodology.
