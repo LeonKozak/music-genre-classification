@@ -117,26 +117,15 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-### 4. Add the GTZAN dataset
+### 4. Download the GTZAN dataset
 
-Download the **GTZAN Genre Collection** and place the `genres_original` folder inside:
+This project uses the [GTZAN Dataset – Music Genre Classification](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification).
+
+Download the dataset and place the `genres_original` folder inside:
 
 ```text
 data/
 └── genres_original/
-    ├── blues/
-    ├── classical/
-    ├── country/
-    ├── disco/
-    ├── hiphop/
-    ├── jazz/
-    ├── metal/
-    ├── pop/
-    ├── reggae/
-    └── rock/
-```
-
-The dataset itself is not included in this repository.
 
 ### 5. Generate MFCC features
 
