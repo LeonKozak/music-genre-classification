@@ -126,6 +126,7 @@ Download the dataset and place the `genres_original` folder inside:
 ```text
 data/
 └── genres_original/
+```
 
 ### 5. Generate MFCC features
 
